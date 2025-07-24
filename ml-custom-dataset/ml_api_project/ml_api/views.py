@@ -1,27 +1,23 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-import joblib
-from django.conf import settings
-import os
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+import joblib  # or pickle
 
-# Load model and encoder using correct paths
-model_path = os.path.join(settings.BASE_DIR, "ml_api", "model.pkl")
-encoder_path = os.path.join(settings.BASE_DIR, "ml_api", "label_encoder.pkl")
+# Load your ML model (assumes you trained and saved it before)
+model = joblib.load('ml_model.pkl')  # make sure this file exists
 
-# Load model and label encoder
-model = joblib.load(model_path)
-label_encoder = joblib.load(encoder_path)
+@csrf_exempt
+def predict_breed(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        tail_length = data.get('tail_length')
+        ear_size = data.get('ear_size')
 
-class PredictView(APIView):
-    def post(self, request):
-        try:
-            tail_length = float(request.data.get("tail_length"))
-            ear_size = float(request.data.get("ear_size"))
+        if tail_length is None or ear_size is None:
+            return JsonResponse({'error': 'Missing parameters'}, status=400)
 
-            prediction = model.predict([[tail_length, ear_size]])
-            breed_label = label_encoder.inverse_transform(prediction)[0]
+        # Predict using model
+        prediction = model.predict([[tail_length, ear_size]])[0]
 
-            return Response({"prediction": breed_label})
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({'breed': prediction})
+    return JsonResponse({'error': 'Only POST method allowed'}, status=405)
